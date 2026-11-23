@@ -15,6 +15,7 @@ import pytest
 from playwright.sync_api import expect
 
 from pages.home_page import HomePage
+from pages.login_page import LoginPage
 
 
 # ---------------------------------------------------------------- B1.1 (together with the teacher)
@@ -34,63 +35,129 @@ def test_b1_1_search_keyword_shows_only_matching_products(page):
 
 # ---------------------------------------------------------------- B1.2
 def test_b1_2_search_unknown_keyword_shows_no_results_message(page):
-    """Goal: empty search state.
-    Precondition: none.
-    Expected: the message 'There are no products found.' and zero product cards."""
-    # TODO: search "zzz-no-such-tool", then 2 expects (message text, product count 0)
-    raise NotImplementedError("B1.2")
+    """Goal: kiểm tra tìm kiếm không có kết quả.
+    Precondition: mở trang chủ.
+    Expected: hiện thông báo không tìm thấy và không có sản phẩm."""
+    home = HomePage(page).open().search("zzz-no-such-tool")
+
+    expect(home.search_completed).to_be_visible()
+    expect(home.no_results).to_have_text("There are no products found.")
+    expect(home.product_names).to_have_count(0)
 
 
 # ---------------------------------------------------------------- B1.3
 def test_b1_3_product_add_quantity_three_updates_cart_badge(page):
-    """Goal: add-to-cart uses the chosen quantity.
-    Precondition: product 'Claw Hammer' exists.
-    Expected: toast 'Product added to shopping cart' and the cart badge shows 3."""
-    # TODO: HomePage(page).open().open_product("Claw Hammer") ... add_to_cart(quantity=3)
-    raise NotImplementedError("B1.3")
+    """Goal: kiểm tra thêm sản phẩm theo số lượng đã chọn.
+    Precondition: sản phẩm Claw Hammer tồn tại, giỏ hàng trống.
+    Expected: hiện toast thành công và badge giỏ hàng bằng 3."""
+    product = HomePage(page).open().open_product("Claw Hammer")
+
+    expect(product.name).to_contain_text("Claw Hammer")
+
+    product.add_to_cart(quantity=3)
+
+    expect(product.toast).to_contain_text("Product added to shopping cart")
+    expect(product.cart_quantity).to_have_text("3")
 
 
 # ---------------------------------------------------------------- B1.4
 def test_b1_4_cart_line_price_equals_unit_price_times_quantity(page):
-    """Goal: cart arithmetic.
-    Precondition: empty cart (a new context per test gives you one).
-    Expected: line price = unit price x 2 and total = sum of the lines."""
-    # TODO: read the unit price on the product page BEFORE adding, then go_to_cart()
-    # Hint: compare floats with pytest.approx
-    raise NotImplementedError("B1.4")
+    """Goal: kiểm tra thành tiền và tổng giỏ hàng.
+    Precondition: giỏ hàng trống, sản phẩm Combination Pliers tồn tại.
+    Expected: thành tiền bằng đơn giá nhân 2, tổng bằng tổng các dòng."""
+    product = HomePage(page).open().open_product("Combination Pliers")
+
+    expect(product.name).to_contain_text("Combination Pliers")
+    expect(product.unit_price).to_be_visible()
+
+    unit = product.price()
+
+    product.add_to_cart(quantity=2)
+    expect(product.cart_quantity).to_have_text("2")
+
+    cart = product.go_to_cart()
+
+    expect(cart.product_titles).to_have_count(1)
+    expect(cart.product_titles.first).to_have_text("Combination Pliers")
+    expect(cart.quantities.first).to_have_value("2")
+    expect(cart.line_prices.first).to_be_visible()
+    expect(cart.total).to_be_visible()
+
+    line_totals = cart.line_totals()
+
+    assert line_totals == pytest.approx([unit * 2])
+    assert cart.total_value() == pytest.approx(sum(line_totals))
 
 
 # ---------------------------------------------------------------- B1.5
 def test_b1_5_login_wrong_password_shows_error(page):
-    """Goal: invalid credentials are rejected.
-    Precondition: an e-mail with no account. NEVER a shared account: Toolshop counts failed
-    logins (failed_login_attempts) and can lock it for the whole class.
-    Expected: 'Invalid email or password' and the URL still ends with /auth/login."""
-    # TODO: rewrite test_spaghetti_login_wrong_password with LoginPage
-    raise NotImplementedError("B1.5")
+    """Goal: kiểm tra từ chối thông tin đăng nhập sai.
+    Precondition: dùng email không tồn tại, không dùng tài khoản chung.
+    Expected: hiện lỗi và vẫn ở trang đăng nhập."""
+    login_page = LoginPage(page).open()
+
+    login_page.login(
+        "nobody-here@example.com",
+        "Wrong-Password-123",
+    )
+
+    expect(login_page.error).to_contain_text("Invalid email or password")
+    expect(page).to_have_url(re.compile(r"/auth/login$"))
 
 
 def test_b1_5_login_empty_form_shows_required_errors(page):
-    """Goal: client-side validation.
-    Precondition: none.
-    Expected: 'Email is required' and 'Password is required'."""
-    raise NotImplementedError("B1.5")
+    """Goal: kiểm tra các trường bắt buộc của form đăng nhập.
+    Precondition: chưa nhập email và mật khẩu.
+    Expected: hiện Email is required và Password is required."""
+    login_page = LoginPage(page).open()
+
+    login_page.submit_button.click()
+
+    expect(login_page.email_error).to_have_text("Email is required")
+    expect(login_page.password_error).to_have_text("Password is required")
 
 
 # ---------------------------------------------------------------- B1.6
 def test_b1_6_cart_continue_shopping_returns_to_home(page):
-    """Goal: page objects chain: each action returns the next page object.
-    Precondition: none.
-    Expected: after 'Continue Shopping' the product grid is visible again."""
-    # TODO: one chain: HomePage(page).open().open_product("Hammer").add_to_cart().go_to_cart()
-    raise NotImplementedError("B1.6")
+    """Goal: kiểm tra quay lại trang chủ từ giỏ hàng.
+    Precondition: sản phẩm Hammer tồn tại và giỏ hàng ban đầu trống.
+    Expected: giỏ có Hammer, bấm Continue Shopping hiện lại sản phẩm."""
+    cart = (
+        HomePage(page)
+        .open()
+        .open_product("Hammer")
+        .add_to_cart()
+        .go_to_cart()
+    )
+
+    expect(cart.product_titles).to_have_count(1)
+    expect(cart.product_titles.first).to_have_text("Hammer")
+    expect(cart.cart_quantity).to_have_text("1")
+
+    cart.continue_shopping.click()
+
+    home = HomePage(page)
+    expect(home.product_names.first).to_be_visible()
 
 
 # ---------------------------------------------------------------- B1.7 (challenge)
 @pytest.mark.parametrize("order", ["price,asc", "price,desc"])
 def test_b1_7_sort_by_price_orders_products(page, order):
-    """Goal: sorting.
-    Precondition: none.
-    Expected: prices on the first page are sorted in the chosen direction."""
-    # TODO: sort_by(order), wait for the element data-test="sorting_completed", then compare with sorted()
-    raise NotImplementedError("B1.7")
+    """Goal: kiểm tra sắp xếp sản phẩm theo giá.
+    Precondition: trang chủ có sản phẩm.
+    Expected: giá tăng dần hoặc giảm dần theo lựa chọn."""
+    home = HomePage(page).open().sort_by(order)
+
+    expect(home.sorting_completed).to_be_visible()
+    expect(home.product_prices.first).to_be_visible()
+
+    prices = home.prices()
+
+    assert len(prices) >= 2, "Cần ít nhất hai sản phẩm để kiểm tra thứ tự giá"
+
+    expected_prices = sorted(
+        prices,
+        reverse=(order == "price,desc"),
+    )
+
+    assert prices == expected_prices
