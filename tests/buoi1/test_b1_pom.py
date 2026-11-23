@@ -27,7 +27,7 @@ def test_b1_1_search_keyword_shows_only_matching_products(page):
     Expected: caption shows the keyword and every product name contains it."""
     home = HomePage(page).open().search("pliers")
     expect(home.search_completed).to_be_visible()
-    expect(home.search_caption).to_contain_text("plierz")
+    expect(home.search_caption).to_contain_text("pliers")
     names = home.product_names.all_inner_texts()
     assert names, "search returned no products"
     assert all("pliers" in n.lower() for n in names), names
